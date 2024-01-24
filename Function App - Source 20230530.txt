@@ -1,0 +1,93 @@
+#r "Newtonsoft.Json"
+
+//ProfiseeSampleWebhookFunctionApp is a Profisee code sample demonstrating the minimum code and logic necessary to:
+    // A. Receive an http request from a Profisee Workflow Webhook Activity
+    // B. Translate the authentication schema and call the Logic App and retrieve its response
+    // C. Respond successfully to Profisee's Workflow with the information provided by the Logic App
+// Note - There may be other methods to accomplish the  goal and code is for learning purposes only - use at your own risk
+
+//Authors: Lee Gregory, James Sturges, Nico Lavrijsen
+    //20230501 LG Created for Profisee 2023R1
+    //20230519 JS Successful response to Workflow
+    //20230522 JS Got LogicApp call working successfully
+    //20230525 LG Documentation & send response to the Workflow
+
+//for the HTTPTrigger 
+using System.Net;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Primitives;
+using Newtonsoft.Json;
+
+//for the logic app
+using System;
+using System.Threading.Tasks;
+using System.Net.Http;
+using System.Text;
+
+//function method
+public static async Task<IActionResult> Run(HttpRequest req, ILogger log)
+{
+    log.LogInformation("ProfiseeSample - C# HTTP trigger function processed a request.");
+    
+    //process the input from the Workflow - read the body of the incoming request into a string
+    string bodyText = await new StreamReader(req.Body).ReadToEndAsync();
+    //log.LogInformation("Body: " + bodyText);
+
+    //deserialize the bodytext and place key value pairs into a dictionary
+    Dictionary<string, object> bodyDictionary = JsonConvert.DeserializeObject<Dictionary<string, object>>(bodyText);
+    //log.LogInformation("UserName: " + bodyDictionary["UserName"]);
+    //log.LogInformation("RecordCode: " + bodyDictionary["RecordCode"]);
+    //log.LogInformation("EventName: " + bodyDictionary["EventName"]);
+    
+    
+    //translate authentication schema
+        //relocate the Authorization header from the workflows request into the dictionary (Logic Apps use the SAS protocol and you can't have two protocols in use)
+        string myAuthorizationHeader = req.Headers["Authorization"];
+        
+        //check if the value is empty
+        if (string.IsNullOrEmpty(myAuthorizationHeader))
+            {log.LogInformation("NO Authorization header"); }
+        else
+            {log.LogInformation($"Authorization header: {myAuthorizationHeader}"); }
+
+        //add the auth token to the dictionary
+        bodyDictionary.Add("Token", myAuthorizationHeader);
+    //
+
+
+    //call the Logic App
+        //first set the URI for the logic app workflow. You can get this value from the logic app's 'Overview' pane
+        string myLogicAppUri = "https://prod-14.eastus.logic.azure.com:443/workflows/9b2a17f8191c4fc492617331028f233c/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=PwdK1WIyru3EJMzulzq3BWOiZWtB-fX5TT0diuH-0_U";
+        //log.LogInformation("URI: " + myLogicAppUri);
+
+        //additional sample URIs
+        //hello world        https://prod-25.eastus.logic.azure.com:443/workflows/eac6fa4b17114472a64d5180b12e91dd/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=0SAiA3ifDhHMQUCzvIQuhCvfODPMCx6CeLymhS2_Br 
+        //testprofiseerest   https://prod-14.eastus.logic.azure.com:443/workflows/9b2a17f8191c4fc492617331028f233c/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=PwdK1WIyru3EJMzulzq3BWOiZWtB-fX5TT0diuH-0_
+            
+        //You should reuse the instance of HTTP clients if possible. For more information, see https://learn.microsoft.com/azure/azure-functions/manage-connections.
+        HttpClient myHttpClient = new HttpClient();
+
+        //serialize the body dictionary into a new stringcontent and send request to the Logic App
+        StringContent myStringContent = new StringContent(JsonConvert.SerializeObject(bodyDictionary), Encoding.UTF8, "application/json");
+        var myLogicAppResponse = await myHttpClient.PostAsync(myLogicAppUri, myStringContent);
+    //
+
+    //form our response to the Workflow 
+    
+        //include the dictionary from the LogicApp in reponse to WF
+            string myLogicAppResponseBody = await myLogicAppResponse.Content.ReadAsStringAsync();
+            //log.LogInformation("LogicAppResponsePayload " + myLogicAppResponseBody);
+
+            //deserialize the bodytext and place value pairs into a dictionary
+            Dictionary<string, object> myResponseDictionary = JsonConvert.DeserializeObject<Dictionary<string, object>>(myLogicAppResponseBody);
+            
+        //
+
+    //send response to the Profisee Workflow
+    Dictionary<string, object> myWorkflowResponse = new Dictionary<string, object>();
+    myWorkflowResponse.Add("ProcessingStatus", 200);
+    myWorkflowResponse.Add("ResponsePayload", myResponseDictionary);  
+    
+    return new OkObjectResult(myWorkflowResponse);
+    
+}
