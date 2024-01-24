@@ -1,0 +1,243 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "For_Each_Record_In_Data": {
+                "actions": {
+                    "Append_to_array_variable": {
+                        "inputs": {
+                            "name": "Records",
+                            "value": {
+                                "Code": "@{items('For_Each_Record_In_Data')?['code']}",
+                                "Name": "@{items('For_Each_Record_In_Data')?['name']}"
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "AppendToArrayVariable"
+                    }
+                },
+                "foreach": "@body('Parse_JSON_Body_from_Profisee_REST')?['data']",
+                "runAfter": {
+                    "Initialize_Records_Array": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "HTTP_call_Profisee_REST": {
+                "inputs": {
+                    "authentication": {
+                        "type": "Raw",
+                        "value": "@variables('Token')"
+                    },
+                    "headers": {
+                        "accept": "application/json"
+                    },
+                    "method": "GET",
+                    "uri": "https://profiseecloud.com/psteampoc/rest/v1/Records/Profisee%20Sample%20Webhook?Attributes=%5BName%5D&CountsOnly=false&DbaFormat=0&OrderBy=%5BCode%5D%20asc&PageNumber=1&PageSize=50"
+                },
+                "runAfter": {
+                    "Initialize_variable_Token": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http"
+            },
+            "Initialize_Records_Array": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Records",
+                            "type": "array"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Parse_JSON_Body_from_Profisee_REST": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_ResponseBody": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ResponseBody",
+                            "type": "object",
+                            "value": {
+                                "Records": "@variables('Records')",
+                                "resultCount": "@body('Parse_JSON_Body_from_Profisee_REST')?['resultCount']"
+                            }
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "For_Each_Record_In_Data": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_variable_RecordNames": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "RecordNames",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            },
+            "Initialize_variable_Token": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Token",
+                            "type": "string",
+                            "value": "@triggerBody()?['Token']"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_variable_RecordNames": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Parse_JSON_Body_from_Profisee_REST": {
+                "inputs": {
+                    "content": "@body('HTTP_call_Profisee_REST')",
+                    "schema": {
+                        "properties": {
+                            "data": {
+                                "items": {
+                                    "properties": {
+                                        "canDelete": {
+                                            "type": "boolean"
+                                        },
+                                        "canUpdate": {
+                                            "type": "boolean"
+                                        },
+                                        "code": {
+                                            "type": "string"
+                                        },
+                                        "enterDTM": {
+                                            "type": "string"
+                                        },
+                                        "enterUserName": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "internalId": {
+                                            "type": "integer"
+                                        },
+                                        "lastChgDTM": {
+                                            "type": "string"
+                                        },
+                                        "lastChgUserName": {
+                                            "type": "string"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "validationStatusID": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "internalId",
+                                        "id",
+                                        "code",
+                                        "name",
+                                        "enterDTM",
+                                        "enterUserName",
+                                        "lastChgDTM",
+                                        "lastChgUserName",
+                                        "validationStatusID",
+                                        "canUpdate",
+                                        "canDelete"
+                                    ],
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            "nextPage": {},
+                            "pageNumber": {
+                                "type": "integer"
+                            },
+                            "pageSize": {
+                                "type": "integer"
+                            },
+                            "previousPage": {},
+                            "resultCount": {
+                                "type": "integer"
+                            },
+                            "totalPages": {
+                                "type": "integer"
+                            },
+                            "totalRecords": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "runAfter": {
+                    "HTTP_call_Profisee_REST": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson"
+            },
+            "Response": {
+                "inputs": {
+                    "body": "@variables('ResponseBody')",
+                    "statusCode": 200
+                },
+                "kind": "Http",
+                "runAfter": {
+                    "Initialize_ResponseBody": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "parameters": {},
+        "triggers": {
+            "manual": {
+                "inputs": {
+                    "method": "POST",
+                    "schema": {
+                        "properties": {
+                            "EventName": {
+                                "type": "string"
+                            },
+                            "RecordCode": {
+                                "type": "string"
+                            },
+                            "Token": {
+                                "type": "string"
+                            },
+                            "UserName": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "kind": "Http",
+                "type": "Request"
+            }
+        }
+    },
+    "parameters": {}
+}
